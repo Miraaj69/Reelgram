@@ -4,10 +4,10 @@
     "slug": "reelgram",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -21,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./adaptive-icon.png",
         "backgroundColor": "#000000"
       },
       "package": "com.reelgram.app",
@@ -33,7 +33,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./favicon.png"
     },
     "plugins": [
       [
