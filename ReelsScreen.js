@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useMediaLibrary } from './useMediaLibrary';
 import VideoItem from './VideoItem';
 
@@ -22,20 +23,11 @@ export default function ReelsScreen() {
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   const handleDelete = useCallback((video) => {
-    Alert.alert(
-      'Delete Video',
-      `"${video.filename}" will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
-            const ok = await deleteVideo(video.id);
-            if (!ok) Alert.alert('Error', 'Could not delete this video.');
-          },
-        },
-      ]
-    );
+    // Delete confirmation is now handled inside VideoItem (DeleteModal)
+    // This function just executes the delete after confirmation
+    deleteVideo(video.id).then((ok) => {
+      if (!ok) Alert.alert('Error', 'Could not delete this video.');
+    });
   }, [deleteVideo]);
 
   if (loading) {
@@ -106,43 +98,43 @@ export default function ReelsScreen() {
         onEndReachedThreshold={0.5}
       />
 
-      {/* Logo header */}
+      {/* ── Top header overlay ── */}
       <SafeAreaView style={styles.header} pointerEvents="none">
         <Text style={styles.logo}>ReelGram</Text>
-        <View style={styles.countPill}>
+        <BlurView intensity={35} tint="dark" style={styles.countPill}>
           <Text style={styles.countText}>{videos.length} videos</Text>
-        </View>
+        </BlurView>
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F1115' },
+  container: { flex: 1, backgroundColor: '#0A0A0F' },
   center: {
-    flex: 1, backgroundColor: '#0F1115',
+    flex: 1, backgroundColor: '#0A0A0F',
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40,
   },
   header: {
     position: 'absolute', top: 0, left: 0, right: 0,
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingHorizontal: 20, paddingTop: 6,
-    zIndex: 20,
+    alignItems: 'center', paddingHorizontal: 20, paddingTop: 6, zIndex: 20,
   },
   logo: {
-    fontSize: 22, fontWeight: '800', letterSpacing: -0.5,
-    color: '#fff',
+    fontSize: 22, fontWeight: '800', letterSpacing: -0.5, color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
   countPill: {
-    backgroundColor: 'rgba(108,92,231,0.22)',
-    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4,
-    borderWidth: 1, borderColor: 'rgba(108,92,231,0.35)',
+    borderRadius: 14, overflow: 'hidden',
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(108,92,231,0.3)',
   },
-  countText: { color: '#A29BFE', fontSize: 12, fontWeight: '600' },
-  loadingText: { color: 'rgba(255,255,255,0.55)', fontSize: 15, marginTop: 14 },
+  countText: { color: '#A29BFE', fontSize: 12, fontWeight: '700' },
+  loadingText: { color: 'rgba(255,255,255,0.5)', fontSize: 15, marginTop: 14 },
   bigEmoji: { fontSize: 64, marginBottom: 20 },
   emptyTitle: { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
-  emptySubtitle: { color: 'rgba(255,255,255,0.45)', fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  emptySubtitle: { color: 'rgba(255,255,255,0.42)', fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
   accentBtn: { borderRadius: 30, overflow: 'hidden' },
   accentBtnGrad: { paddingHorizontal: 32, paddingVertical: 13 },
   accentBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },

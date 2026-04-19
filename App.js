@@ -5,8 +5,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Text, StyleSheet, Platform, View } from 'react-native';
+import { Text, StyleSheet, Platform, View, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withSpring,
+} from 'react-native-reanimated';
 
 import ReelsScreen from './ReelsScreen';
 import FavoritesScreen from './FavoritesScreen';
@@ -14,35 +17,55 @@ import { VideoProvider } from './VideoContext';
 
 const Tab = createBottomTabNavigator();
 
-const TabIcon = ({ name, focused }) => (
-  <View style={[styles.tabIconWrap, focused && styles.tabIconActive]}>
-    <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>
-      {name === 'Reels' ? '▶' : '♥'}
-    </Text>
-  </View>
-);
+// ── Animated tab pill button ──
+function TabPill({ label, icon, focused, onPress }) {
+  const scale = useSharedValue(1);
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-function GlassTabBar({ state, descriptors, navigation }) {
+  const handlePress = () => {
+    scale.value = withSpring(0.88, { damping: 10 }, () => {
+      scale.value = withSpring(1, { damping: 12 });
+    });
+    onPress();
+  };
+
+  return (
+    <Animated.View style={anim}>
+      <TouchableOpacity onPress={handlePress} activeOpacity={1} style={styles.tabPillTouch}>
+        {focused ? (
+          <BlurView intensity={50} tint="dark" style={[styles.tabPill, styles.tabPillActive]}>
+            <Text style={styles.tabPillIcon}>{icon}</Text>
+            <Text style={styles.tabPillLabelActive}>{label}</Text>
+          </BlurView>
+        ) : (
+          <View style={styles.tabPillInactive}>
+            <Text style={[styles.tabPillIcon, { opacity: 0.4 }]}>{icon}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function GlassTabBar({ state, navigation }) {
   return (
     <View style={styles.tabBarOuter}>
-      <BlurView intensity={40} tint="dark" style={styles.tabBarBlur}>
+      <BlurView intensity={55} tint="dark" style={styles.tabBarBlur}>
         <View style={styles.tabBarInner}>
           {state.routes.map((route, index) => {
-            const isFocused = state.index === index;
-            const onPress = () => {
-              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-              if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
-            };
+            const focused = state.index === index;
+            const icon = route.name === 'Reels' ? '▶' : '♥';
             return (
-              <View key={route.key} style={styles.tabItem}>
-                <Text
-                  onPress={onPress}
-                  style={[styles.tabLabel, isFocused && styles.tabLabelActive]}
-                >
-                  {route.name === 'Reels' ? '▶  Reels' : '♥  Favorites'}
-                </Text>
-                {isFocused && <View style={styles.tabIndicator} />}
-              </View>
+              <TabPill
+                key={route.key}
+                label={route.name}
+                icon={icon}
+                focused={focused}
+                onPress={() => {
+                  const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                  if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+                }}
+              />
             );
           })}
         </View>
@@ -75,54 +98,50 @@ export default function App() {
 const styles = StyleSheet.create({
   tabBarOuter: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: Platform.OS === 'ios' ? 85 : 68,
+    bottom: Platform.OS === 'ios' ? 24 : 16,
+    left: 32,
+    right: 32,
+    borderRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 12,
   },
   tabBarBlur: {
-    flex: 1,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
   },
   tabBarInner: {
-    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 4,
-  },
-  tabItem: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    position: 'relative',
+    paddingHorizontal: 12,
+    gap: 8,
   },
-  tabLabel: {
-    color: 'rgba(255,255,255,0.38)',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.4,
+  tabPillTouch: {},
+  tabPill: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 10,
+    borderRadius: 22, gap: 7, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(108,92,231,0.4)',
   },
-  tabLabelActive: {
-    color: '#A29BFE',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    width: 32,
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: '#6C5CE7',
-  },
-  tabIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabIconActive: {
+  tabPillActive: {
     backgroundColor: 'rgba(108,92,231,0.18)',
+    shadowColor: '#6C5CE7',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  tabPillInactive: {
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 22,
+  },
+  tabPillIcon: { fontSize: 16, color: '#fff' },
+  tabPillLabelActive: {
+    color: '#A29BFE', fontSize: 14, fontWeight: '700', letterSpacing: 0.3,
   },
 });
