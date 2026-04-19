@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "ReelGram",
+    "slug": "reelgram",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.reelgram.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "ReelGram needs access to your photos and videos to display them in reels format.",
+        "NSPhotoLibraryAddUsageDescription": "ReelGram needs access to save videos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.reelgram.app",
+      "permissions": [
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow ReelGram to access your videos.",
+          "savePhotosPermission": "Allow ReelGram to save videos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "react-native-reanimated"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1ea68456-dd36-44bb-b93d-11779cecb9f1"
+      }
+    },
+    "owner": "johnysins"
+  }
+}
