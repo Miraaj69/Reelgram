@@ -43,8 +43,7 @@
           "savePhotosPermission": "Allow ReelGram to save videos.",
           "isAccessMediaLocationEnabled": true
         }
-      ],
-      "react-native-reanimated"
+      ]
     ],
     "extra": {
       "eas": {
