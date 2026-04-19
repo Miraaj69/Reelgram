@@ -6,9 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, StyleSheet, Platform, View, TouchableOpacity } from 'react-native';
-import { BlurView } from 'expo-blur';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming,
 } from 'react-native-reanimated';
 
 import ReelsScreen from './ReelsScreen';
@@ -17,8 +16,7 @@ import { VideoProvider } from './VideoContext';
 
 const Tab = createBottomTabNavigator();
 
-// ── Animated tab pill button ──
-function TabPill({ label, icon, focused, onPress }) {
+function TabBtn({ label, icon, focused, onPress }) {
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -30,46 +28,37 @@ function TabPill({ label, icon, focused, onPress }) {
   };
 
   return (
-    <Animated.View style={anim}>
-      <TouchableOpacity onPress={handlePress} activeOpacity={1} style={styles.tabPillTouch}>
-        {focused ? (
-          <BlurView intensity={50} tint="dark" style={[styles.tabPill, styles.tabPillActive]}>
-            <Text style={styles.tabPillIcon}>{icon}</Text>
-            <Text style={styles.tabPillLabelActive}>{label}</Text>
-          </BlurView>
-        ) : (
-          <View style={styles.tabPillInactive}>
-            <Text style={[styles.tabPillIcon, { opacity: 0.4 }]}>{icon}</Text>
-          </View>
-        )}
+    <Animated.View style={[styles.tabBtn, anim]}>
+      <TouchableOpacity onPress={handlePress} activeOpacity={1} style={styles.tabBtnTouch}>
+        <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>{icon}</Text>
+        <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+        {focused && <View style={styles.tabUnderline} />}
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-function GlassTabBar({ state, navigation }) {
+function MinimalTabBar({ state, navigation }) {
   return (
-    <View style={styles.tabBarOuter}>
-      <BlurView intensity={55} tint="dark" style={styles.tabBarBlur}>
-        <View style={styles.tabBarInner}>
-          {state.routes.map((route, index) => {
-            const focused = state.index === index;
-            const icon = route.name === 'Reels' ? '▶' : '♥';
-            return (
-              <TabPill
-                key={route.key}
-                label={route.name}
-                icon={icon}
-                focused={focused}
-                onPress={() => {
-                  const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                  if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
-                }}
-              />
-            );
-          })}
-        </View>
-      </BlurView>
+    <View style={styles.tabBar}>
+      <View style={styles.tabBarInner}>
+        {state.routes.map((route, index) => {
+          const focused = state.index === index;
+          const icon = route.name === 'Reels' ? '▶' : '♥';
+          return (
+            <TabBtn
+              key={route.key}
+              label={route.name}
+              icon={icon}
+              focused={focused}
+              onPress={() => {
+                const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+              }}
+            />
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -82,7 +71,7 @@ export default function App() {
           <StatusBar style="light" />
           <NavigationContainer>
             <Tab.Navigator
-              tabBar={(props) => <GlassTabBar {...props} />}
+              tabBar={(props) => <MinimalTabBar {...props} />}
               screenOptions={{ headerShown: false }}
             >
               <Tab.Screen name="Reels" component={ReelsScreen} />
@@ -96,52 +85,28 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  tabBarOuter: {
+  tabBar: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 24 : 16,
-    left: 32,
-    right: 32,
-    borderRadius: 30,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  tabBarBlur: {
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
+    bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.07)',
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
   },
   tabBarInner: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingTop: 10,
   },
-  tabPillTouch: {},
-  tabPill: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 10,
-    borderRadius: 22, gap: 7, overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(108,92,231,0.4)',
-  },
-  tabPillActive: {
-    backgroundColor: 'rgba(108,92,231,0.18)',
-    shadowColor: '#6C5CE7',
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  tabPillInactive: {
-    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 22,
-  },
-  tabPillIcon: { fontSize: 16, color: '#fff' },
-  tabPillLabelActive: {
-    color: '#A29BFE', fontSize: 14, fontWeight: '700', letterSpacing: 0.3,
+  tabBtn: { alignItems: 'center' },
+  tabBtnTouch: { alignItems: 'center', paddingHorizontal: 32, paddingBottom: 4, position: 'relative' },
+  tabIcon: { fontSize: 18, color: 'rgba(255,255,255,0.3)', marginBottom: 3 },
+  tabIconActive: { color: '#FF2D55' },
+  tabLabel: { fontSize: 11, color: 'rgba(255,255,255,0.28)', fontWeight: '600', letterSpacing: 0.5 },
+  tabLabelActive: { color: '#fff' },
+  tabUnderline: {
+    position: 'absolute', bottom: -4, width: 20, height: 2,
+    backgroundColor: '#FF2D55', borderRadius: 2,
   },
 });

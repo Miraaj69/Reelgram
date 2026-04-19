@@ -1,61 +1,75 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View, StyleSheet, Dimensions, Text,
-  TouchableOpacity, Pressable, Platform, Modal,
+  Platform, Modal, TouchableOpacity,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import Animated, {
-  useSharedValue, useAnimatedStyle, useAnimatedGestureHandler,
-  withSpring, withTiming, withSequence, runOnJS, interpolate, Extrapolate,
+  useSharedValue, useAnimatedStyle,
+  withSpring, withTiming, withSequence,
+  runOnJS, interpolate, Extrapolate,
 } from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
+import {
+  Gesture, GestureDetector,
+} from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useVideoContext } from './VideoContext';
 
 const { width: W, height: H } = Dimensions.get('window');
-const SWIPE_LIKE_THRESHOLD = 80;
-const SWIPE_DELETE_THRESHOLD = -80;
+const SWIPE_THRESHOLD = 100;
+
+function shortenName(name = '') {
+  // Remove extension, shorten
+  const base = name.replace(/\.[^/.]+$/, '');
+  return base.length > 26 ? base.slice(0, 24) + '…' : base;
+}
 
 function formatDuration(s) {
   if (!s) return '0:00';
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-function shortenName(name = '') {
-  return name.length > 28 ? name.slice(0, 25) + '...' : name;
-}
-
-// ── Premium Glass Action Button (Right sidebar) ──
-function SideBtn({ icon, label, onPress, active, danger }) {
+// ── Clean action button (no blur, solid opacity) ──
+function ActionBtn({ icon, onPress, onPressIn, onPressOut, active, danger, size = 22 }) {
   const scale = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const handlePress = () => {
-    scale.value = withSequence(withSpring(0.82, { damping: 10 }), withSpring(1, { damping: 12 }));
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onPress();
+  const anim = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const triggerPress = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(
+        danger ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light
+      );
+    }
+    onPress?.();
   };
 
-  const borderColor = active
-    ? 'rgba(255,77,77,0.55)'
-    : danger
-    ? 'rgba(255,77,77,0.3)'
-    : 'rgba(255,255,255,0.13)';
-
-  const glowColor = active ? 'rgba(255,77,77,0.18)' : 'transparent';
+  const handlePressIn = () => {
+    scale.value = withTiming(0.85, { duration: 80 });
+    onPressIn?.();
+  };
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 12 });
+    onPressOut?.();
+  };
 
   return (
-    <Animated.View style={[anim, { shadowColor: active ? '#FF4D4D' : '#000', shadowOpacity: active ? 0.5 : 0, shadowRadius: 12, elevation: active ? 6 : 0 }]}>
-      <TouchableOpacity onPress={handlePress} activeOpacity={1}>
-        <BlurView intensity={55} tint="dark" style={[
-          styles.sideBtn,
-          { borderColor, backgroundColor: glowColor },
-        ]}>
-          <Text style={[styles.sideBtnIcon, (active || danger) && { color: '#FF4D4D' }]}>{icon}</Text>
-          <Text style={[styles.sideBtnLabel, (active || danger) && { color: 'rgba(255,120,120,0.85)' }]}>{label}</Text>
-        </BlurView>
+    <Animated.View style={anim}>
+      <TouchableOpacity
+        onPress={triggerPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+        style={[
+          styles.actionBtn,
+          active && styles.actionBtnActive,
+          danger && styles.actionBtnDanger,
+        ]}
+      >
+        <Text style={[styles.actionBtnIcon, { fontSize: size }]}>{icon}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -65,25 +79,23 @@ function SideBtn({ icon, label, onPress, active, danger }) {
 function DeleteModal({ visible, filename, onCancel, onConfirm }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.deleteModalBg}>
-        <BlurView intensity={60} tint="dark" style={styles.deleteModalCard}>
-          <View style={styles.deleteIconWrap}>
-            <Text style={styles.deleteModalEmoji}>🗑</Text>
+      <View style={styles.modalOverlay}>
+        <View style={styles.deleteCard}>
+          <View style={styles.deleteIconCircle}>
+            <Text style={{ fontSize: 28 }}>🗑</Text>
           </View>
-          <Text style={styles.deleteModalTitle}>Delete Video?</Text>
-          <Text style={styles.deleteModalSub} numberOfLines={2}>{shortenName(filename)}</Text>
-          <Text style={styles.deleteModalWarn}>This action cannot be undone.</Text>
-          <View style={styles.deleteModalBtns}>
-            <TouchableOpacity style={styles.deleteCancelBtn} onPress={onCancel}>
-              <Text style={styles.deleteCancelText}>Cancel</Text>
+          <Text style={styles.deleteTitle}>Delete Video?</Text>
+          <Text style={styles.deleteSub} numberOfLines={2}>{shortenName(filename)}</Text>
+          <Text style={styles.deleteWarn}>This cannot be undone.</Text>
+          <View style={styles.deleteBtns}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+              <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteConfirmBtn} onPress={onConfirm}>
-              <LinearGradient colors={['#FF4D4D', '#C0392B']} style={styles.deleteConfirmGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                <Text style={styles.deleteConfirmText}>Delete</Text>
-              </LinearGradient>
+            <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm}>
+              <Text style={styles.confirmText}>Delete</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -95,100 +107,147 @@ export default function VideoItem({ video, isActive, onDelete }) {
   const liked = isFavorite(video.id);
 
   const [paused, setPaused] = useState(false);
-  const [showHeart, setShowHeart] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [swipeFeedback, setSwipeFeedback] = useState(null); // 'like' | 'unlike' | null
-
-  const lastTap = useRef(0);
+  const [showHeart, setShowHeart] = useState(false);
 
   // Shared values
   const translateX = useSharedValue(0);
+  const overlayOpacity = useSharedValue(0);      // red/green flash
+  const overlayColor = useSharedValue(0);         // 0=green 1=red
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
   const pauseOpacity = useSharedValue(0);
+  const progressWidth = useSharedValue(0);        // thin top progress bar
 
-  // ── Cleanup on unmount ──
-  React.useEffect(() => {
+  // ── Cleanup ──
+  useEffect(() => {
     return () => {
       videoRef.current?.stopAsync?.();
     };
   }, []);
 
-  // ── Swipe handlers ──
-  const onSwipeLike = useCallback(() => {
+  // ── Haptic helpers (JS thread) ──
+  const hapticLight = useCallback(() => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+  const hapticMedium = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    toggleFavorite(video);
-    setSwipeFeedback(isFavorite(video.id) ? 'unlike' : 'like');
-    setTimeout(() => setSwipeFeedback(null), 1000);
-  }, [video, toggleFavorite, isFavorite]);
-
-  const onSwipeDelete = useCallback(() => {
+  }, []);
+  const hapticHeavy = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }, []);
+
+  // ── Like action ──
+  const doLike = useCallback(() => {
+    hapticMedium();
+    toggleFavorite(video);
+  }, [video, toggleFavorite, hapticMedium]);
+
+  // ── Show delete modal ──
+  const doAskDelete = useCallback(() => {
+    hapticHeavy();
     setShowDeleteModal(true);
-  }, []);
+  }, [hapticHeavy]);
 
-  const gestureHandler = useAnimatedGestureHandler({
-    onActive: ({ translationX }) => {
-      translateX.value = translationX * 0.45;
-    },
-    onEnd: ({ translationX }) => {
-      if (translationX > SWIPE_LIKE_THRESHOLD) runOnJS(onSwipeLike)();
-      else if (translationX < SWIPE_DELETE_THRESHOLD) runOnJS(onSwipeDelete)();
-      translateX.value = withSpring(0, { damping: 24, stiffness: 240 });
-    },
-  });
+  // ── Double tap heart burst ──
+  const triggerHeart = useCallback(() => {
+    hapticMedium();
+    toggleFavorite(video);
+    setShowHeart(true);
+    heartScale.value = withSequence(
+      withSpring(1.3, { damping: 6 }),
+      withTiming(1.1, { duration: 100 }),
+      withTiming(0, { duration: 400 })
+    );
+    heartOpacity.value = withSequence(
+      withTiming(1, { duration: 50 }),
+      withTiming(1, { duration: 420 }),
+      withTiming(0, { duration: 220 })
+    );
+    setTimeout(() => setShowHeart(false), 900);
+  }, [video, toggleFavorite, hapticMedium]);
 
-  // ── Tap handler (single = pause, double = like) ──
-  const handleTap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastTap.current < 280) {
-      // Double tap → like
-      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      toggleFavorite(video);
-      setShowHeart(true);
-      heartScale.value = withSequence(
-        withSpring(1.4, { damping: 7 }),
-        withTiming(1.1, { duration: 100 }),
-        withTiming(0, { duration: 380 })
-      );
-      heartOpacity.value = withSequence(
+  // ── Pause toggle ──
+  const togglePause = useCallback(() => {
+    setPaused((p) => {
+      pauseOpacity.value = withSequence(
         withTiming(1, { duration: 60 }),
-        withTiming(1, { duration: 450 }),
-        withTiming(0, { duration: 250 })
+        withTiming(0, { duration: 700 })
       );
-      setTimeout(() => setShowHeart(false), 850);
-    } else {
-      // Single tap → pause/play
-      setPaused((p) => {
-        pauseOpacity.value = withSequence(
-          withTiming(1, { duration: 70 }),
-          withTiming(0, { duration: 650 })
-        );
-        return !p;
-      });
-    }
-    lastTap.current = now;
-  }, [video, toggleFavorite]);
-
-  const handleLongPress = useCallback(() => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setPaused(true);
+      return !p;
+    });
   }, []);
 
-  const handlePressOut = useCallback(() => setPaused(false), []);
+  const pauseVideo = useCallback(() => setPaused(true), []);
+  const resumeVideo = useCallback(() => setPaused(false), []);
+
+  // ── GESTURES (new Gesture API — conflict-free) ──
+
+  // Pan swipe
+  const pan = Gesture.Pan()
+    .activeOffsetX([-16, 16])
+    .failOffsetY([-12, 12])
+    .onUpdate((e) => {
+      translateX.value = e.translationX * 0.42;
+      const absX = Math.abs(e.translationX);
+      overlayOpacity.value = Math.min(absX / 160, 0.42);
+      overlayColor.value = e.translationX > 0 ? 0 : 1;
+    })
+    .onEnd((e) => {
+      if (e.translationX > SWIPE_THRESHOLD) {
+        runOnJS(doLike)();
+      } else if (e.translationX < -SWIPE_THRESHOLD) {
+        runOnJS(doAskDelete)();
+      }
+      translateX.value = withSpring(0, { damping: 22, stiffness: 220 });
+      overlayOpacity.value = withTiming(0, { duration: 300 });
+    });
+
+  // Double tap
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDelay(250)
+    .onStart(() => {
+      runOnJS(triggerHeart)();
+    });
+
+  // Single tap
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .requireExternalGestureToFail(doubleTap)
+    .onStart(() => {
+      runOnJS(togglePause)();
+    });
+
+  // Long press pause
+  const longPress = Gesture.LongPress()
+    .minDuration(300)
+    .onStart(() => {
+      runOnJS(pauseVideo)();
+      runOnJS(hapticLight)();
+    })
+    .onEnd(() => {
+      runOnJS(resumeVideo)();
+    });
+
+  const composed = Gesture.Simultaneous(
+    pan,
+    Gesture.Exclusive(doubleTap, singleTap),
+    longPress
+  );
 
   // ── Animated styles ──
   const containerAnim = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
 
-  const swipeOverlay = useAnimatedStyle(() => {
-    const tx = translateX.value;
-    const greenA = interpolate(tx, [0, 120], [0, 0.38], Extrapolate.CLAMP);
-    const redA = interpolate(-tx, [0, 120], [0, 0.38], Extrapolate.CLAMP);
-    if (tx > 0) return { backgroundColor: `rgba(0,255,148,${greenA})` };
-    if (tx < 0) return { backgroundColor: `rgba(255,77,77,${redA})` };
-    return { backgroundColor: 'transparent' };
+  const overlayAnim = useAnimatedStyle(() => {
+    const r = overlayColor.value === 1 ? 255 : 0;
+    const g = overlayColor.value === 1 ? 55 : 220;
+    const b = overlayColor.value === 1 ? 48 : 100;
+    return {
+      backgroundColor: `rgba(${r},${g},${b},${overlayOpacity.value})`,
+    };
   });
 
   const heartAnim = useAnimatedStyle(() => ({
@@ -196,76 +255,69 @@ export default function VideoItem({ video, isActive, onDelete }) {
     opacity: heartOpacity.value,
   }));
 
-  const pauseAnim = useAnimatedStyle(() => ({ opacity: pauseOpacity.value }));
-
-  // ── Swipe icon hints ──
-  const leftHintAnim = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [0, 60], [0, 1], Extrapolate.CLAMP),
-    transform: [{ scale: interpolate(translateX.value, [0, 80], [0.7, 1.1], Extrapolate.CLAMP) }],
+  const pauseAnim = useAnimatedStyle(() => ({
+    opacity: pauseOpacity.value,
   }));
-  const rightHintAnim = useAnimatedStyle(() => ({
-    opacity: interpolate(-translateX.value, [0, 60], [0, 1], Extrapolate.CLAMP),
-    transform: [{ scale: interpolate(-translateX.value, [0, 80], [0.7, 1.1], Extrapolate.CLAMP) }],
+
+  const swipeHintLeftAnim = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [0, 50], [0, 1], Extrapolate.CLAMP),
+    transform: [{ scale: interpolate(translateX.value, [0, 80], [0.6, 1.05], Extrapolate.CLAMP) }],
+  }));
+
+  const swipeHintRightAnim = useAnimatedStyle(() => ({
+    opacity: interpolate(-translateX.value, [0, 50], [0, 1], Extrapolate.CLAMP),
+    transform: [{ scale: interpolate(-translateX.value, [0, 80], [0.6, 1.05], Extrapolate.CLAMP) }],
   }));
 
   return (
     <View style={styles.container}>
-      <PanGestureHandler
-        onGestureEvent={gestureHandler}
-        activeOffsetX={[-14, 14]}
-        failOffsetY={[-10, 10]}
-      >
+      <GestureDetector gesture={composed}>
         <Animated.View style={[styles.inner, containerAnim]}>
 
           {/* ── Video ── */}
-          <Pressable
+          <Video
+            ref={videoRef}
+            source={{ uri: video.uri }}
             style={StyleSheet.absoluteFill}
-            onPress={handleTap}
-            onLongPress={handleLongPress}
-            onPressOut={handlePressOut}
-            delayLongPress={320}
-          >
-            <Video
-              ref={videoRef}
-              source={{ uri: video.uri }}
-              style={StyleSheet.absoluteFill}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={isActive && !paused}
-              isLooping
-              isMuted={false}
-            />
-          </Pressable>
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={isActive && !paused}
+            isLooping
+            isMuted={false}
+            onPlaybackStatusUpdate={(status) => {
+              if (status.durationMillis && status.positionMillis) {
+                progressWidth.value = status.positionMillis / status.durationMillis;
+              }
+            }}
+          />
 
           {/* ── Swipe color flash ── */}
-          <Animated.View style={[StyleSheet.absoluteFill, swipeOverlay]} pointerEvents="none" />
+          <Animated.View style={[StyleSheet.absoluteFill, overlayAnim]} pointerEvents="none" />
 
           {/* ── Swipe hint icons ── */}
-          <Animated.View style={[styles.swipeHint, styles.swipeHintLeft, leftHintAnim]} pointerEvents="none">
-            <Text style={styles.swipeHintText}>♥</Text>
+          <Animated.View style={[styles.swipeHint, styles.swipeHintLeft, swipeHintLeftAnim]} pointerEvents="none">
+            <Text style={styles.swipeHintIcon}>♥</Text>
           </Animated.View>
-          <Animated.View style={[styles.swipeHint, styles.swipeHintRight, rightHintAnim]} pointerEvents="none">
-            <Text style={styles.swipeHintText}>🗑</Text>
+          <Animated.View style={[styles.swipeHint, styles.swipeHintRight, swipeHintRightAnim]} pointerEvents="none">
+            <Text style={styles.swipeHintIcon}>🗑</Text>
           </Animated.View>
 
           {/* ── Top gradient ── */}
           <LinearGradient
-            colors={['rgba(10,10,15,0.72)', 'transparent']}
+            colors={['rgba(0,0,0,0.65)', 'rgba(0,0,0,0.2)', 'transparent']}
             style={styles.topGradient}
             pointerEvents="none"
           />
 
           {/* ── Bottom gradient ── */}
           <LinearGradient
-            colors={['transparent', 'rgba(10,10,15,0.6)', 'rgba(10,10,15,0.92)']}
+            colors={['transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.82)']}
             style={styles.bottomGradient}
             pointerEvents="none"
           />
 
-          {/* ── Pause flash ── */}
-          <Animated.View style={[styles.pauseFlash, pauseAnim]} pointerEvents="none">
-            <BlurView intensity={28} tint="dark" style={styles.pauseCircle}>
-              <Text style={styles.pauseIcon}>{paused ? '▶' : '⏸'}</Text>
-            </BlurView>
+          {/* ── Pause indicator ── */}
+          <Animated.View style={[styles.pauseIndicator, pauseAnim]} pointerEvents="none">
+            <Text style={styles.pauseIcon}>{paused ? '▶' : '⏸'}</Text>
           </Animated.View>
 
           {/* ── Double-tap heart burst ── */}
@@ -273,46 +325,32 @@ export default function VideoItem({ video, isActive, onDelete }) {
             <Animated.Text style={[styles.bigHeart, heartAnim]} pointerEvents="none">♥</Animated.Text>
           )}
 
-          {/* ── Swipe feedback pill ── */}
-          {swipeFeedback && (
-            <View style={styles.swipeFeedbackPill}>
-              <Text style={styles.swipeFeedbackText}>
-                {swipeFeedback === 'like' ? '♥ Added to Favorites' : '♡ Removed'}
-              </Text>
-            </View>
-          )}
-
-          {/* ── RIGHT SIDE CONTROLS (thumb-friendly) ── */}
-          <View style={styles.rightControls}>
-            <SideBtn
+          {/* ── RIGHT SIDE ACTIONS ── */}
+          <View style={styles.rightActions}>
+            <ActionBtn
               icon={liked ? '♥' : '♡'}
-              label={liked ? 'Liked' : 'Like'}
               active={liked}
-              onPress={() => {
-                toggleFavorite(video);
-                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
+              onPress={doLike}
             />
-            <SideBtn
+            <ActionBtn
               icon="🗑"
-              label="Delete"
               danger
-              onPress={() => setShowDeleteModal(true)}
+              onPress={doAskDelete}
             />
           </View>
 
           {/* ── BOTTOM META ── */}
           <View style={styles.bottomMeta}>
-            <Text style={styles.filename} numberOfLines={1}>{shortenName(video.filename)}</Text>
-            <BlurView intensity={30} tint="dark" style={styles.durationPill}>
-              <Text style={styles.durationText}>{formatDuration(video.duration)}</Text>
-            </BlurView>
+            <Text style={styles.videoName} numberOfLines={1}>{shortenName(video.filename)}</Text>
+            <Text style={styles.videoDuration}>{formatDuration(video.duration)}</Text>
           </View>
 
-        </Animated.View>
-      </PanGestureHandler>
+          {/* ── Thin progress bar ── */}
+          <ProgressBar progressWidth={progressWidth} />
 
-      {/* ── Delete Confirm Modal ── */}
+        </Animated.View>
+      </GestureDetector>
+
       <DeleteModal
         visible={showDeleteModal}
         filename={video.filename}
@@ -326,111 +364,128 @@ export default function VideoItem({ video, isActive, onDelete }) {
   );
 }
 
+// Separate component to avoid re-render
+function ProgressBar({ progressWidth }) {
+  const barAnim = useAnimatedStyle(() => ({
+    width: `${progressWidth.value * 100}%`,
+  }));
+  return (
+    <View style={styles.progressTrack} pointerEvents="none">
+      <Animated.View style={[styles.progressFill, barAnim]} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { width: W, height: H, backgroundColor: '#0A0A0F' },
+  container: { width: W, height: H, backgroundColor: '#000' },
   inner: { flex: 1 },
 
-  topGradient: { position: 'absolute', left: 0, right: 0, top: 0, height: 130, zIndex: 2 },
-  bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 280, zIndex: 2 },
+  topGradient: { position: 'absolute', left: 0, right: 0, top: 0, height: 120, zIndex: 2 },
+  bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 300, zIndex: 2 },
 
-  pauseFlash: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 8 },
-  pauseCircle: {
-    width: 68, height: 68, borderRadius: 34,
-    justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  pauseIndicator: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center', alignItems: 'center', zIndex: 8,
   },
-  pauseIcon: { fontSize: 26, color: '#fff' },
+  pauseIcon: {
+    fontSize: 48, color: 'rgba(255,255,255,0.88)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
+  },
 
   bigHeart: {
     position: 'absolute', alignSelf: 'center', top: '34%',
-    fontSize: 100, color: '#FF4D4D', zIndex: 10,
-    textShadowColor: 'rgba(255,77,77,0.7)',
-    textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 32,
+    fontSize: 110, color: '#FF2D55', zIndex: 10,
+    textShadowColor: 'rgba(255,45,85,0.6)',
+    textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 30,
   },
-
-  swipeFeedbackPill: {
-    position: 'absolute', alignSelf: 'center', top: '46%', zIndex: 20,
-    backgroundColor: 'rgba(10,10,15,0.82)',
-    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 28,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-  },
-  swipeFeedbackText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   swipeHint: {
-    position: 'absolute', top: '46%', zIndex: 5,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 16, padding: 12,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    position: 'absolute', top: '45%', zIndex: 5,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 50, padding: 14,
   },
-  swipeHintLeft: { left: 16 },
-  swipeHintRight: { right: 16 },
-  swipeHintText: { fontSize: 22 },
+  swipeHintLeft: { left: 20 },
+  swipeHintRight: { right: 20 },
+  swipeHintIcon: { fontSize: 24 },
 
-  // Right sidebar
-  rightControls: {
-    position: 'absolute', right: 14, bottom: 130,
-    alignItems: 'center', gap: 12, zIndex: 10,
+  // Right actions
+  rightActions: {
+    position: 'absolute', right: 16, bottom: 120,
+    alignItems: 'center', gap: 14, zIndex: 10,
   },
-  sideBtn: {
-    alignItems: 'center', paddingVertical: 13, paddingHorizontal: 13,
-    borderRadius: 22, overflow: 'hidden',
-    borderWidth: 1,
-    minWidth: 60,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 8, elevation: 5,
+  actionBtn: {
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderRadius: 50,
+    padding: 13,
+    alignItems: 'center', justifyContent: 'center',
   },
-  sideBtnIcon: { fontSize: 23, color: '#fff' },
-  sideBtnLabel: {
-    color: 'rgba(255,255,255,0.65)', fontSize: 10,
-    fontWeight: '700', marginTop: 5, letterSpacing: 0.4,
+  actionBtnActive: {
+    backgroundColor: 'rgba(255,45,85,0.18)',
   },
+  actionBtnDanger: {
+    backgroundColor: 'rgba(255,59,48,0.15)',
+  },
+  actionBtnIcon: { color: '#fff' },
 
   // Bottom meta
   bottomMeta: {
-    position: 'absolute', bottom: 86, left: 18, right: 90, zIndex: 10,
-    gap: 8,
+    position: 'absolute', bottom: 88, left: 18, right: 80, zIndex: 10, gap: 4,
   },
-  filename: {
-    color: '#fff', fontSize: 13, fontWeight: '700',
+  videoName: {
+    color: '#fff', fontSize: 14, fontWeight: '700',
     textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
   },
-  durationPill: {
-    alignSelf: 'flex-start', borderRadius: 10, overflow: 'hidden',
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  videoDuration: {
+    color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '500',
   },
-  durationText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+
+  // Progress bar
+  progressTrack: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    height: 2, backgroundColor: 'rgba(255,255,255,0.12)', zIndex: 20,
+  },
+  progressFill: {
+    height: 2, backgroundColor: '#FF2D55',
+  },
 
   // Delete modal
-  deleteModalBg: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28,
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.78)',
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32,
   },
-  deleteModalCard: {
-    width: '100%', borderRadius: 28, overflow: 'hidden',
-    padding: 28, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,77,77,0.2)',
+  deleteCard: {
+    width: '100%', backgroundColor: '#1C1C1E',
+    borderRadius: 24, padding: 28, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,59,48,0.25)',
   },
-  deleteIconWrap: {
-    width: 68, height: 68, borderRadius: 34,
-    backgroundColor: 'rgba(255,77,77,0.12)',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,77,77,0.25)',
+  deleteIconCircle: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(255,59,48,0.12)',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+    borderWidth: 1, borderColor: 'rgba(255,59,48,0.2)',
   },
-  deleteModalEmoji: { fontSize: 30 },
-  deleteModalTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 8 },
-  deleteModalSub: { color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center', marginBottom: 6 },
-  deleteModalWarn: { color: 'rgba(255,77,77,0.75)', fontSize: 12, marginBottom: 24, fontWeight: '600' },
-  deleteModalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
-  deleteCancelBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 16,
+  deleteTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  deleteSub: {
+    color: 'rgba(255,255,255,0.45)', fontSize: 13,
+    textAlign: 'center', marginBottom: 6,
+  },
+  deleteWarn: {
+    color: 'rgba(255,59,48,0.7)', fontSize: 12,
+    fontWeight: '600', marginBottom: 24,
+  },
+  deleteBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  cancelBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
   },
-  deleteCancelText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  deleteConfirmBtn: { flex: 1, borderRadius: 16, overflow: 'hidden' },
-  deleteConfirmGrad: { paddingVertical: 14, alignItems: 'center' },
-  deleteConfirmText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  cancelText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  confirmBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 14,
+    backgroundColor: '#FF3B30', alignItems: 'center',
+  },
+  confirmText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

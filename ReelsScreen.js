@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useMediaLibrary } from './useMediaLibrary';
 import VideoItem from './VideoItem';
 
@@ -23,8 +22,6 @@ export default function ReelsScreen() {
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   const handleDelete = useCallback((video) => {
-    // Delete confirmation is now handled inside VideoItem (DeleteModal)
-    // This function just executes the delete after confirmation
     deleteVideo(video.id).then((ok) => {
       if (!ok) Alert.alert('Error', 'Could not delete this video.');
     });
@@ -33,8 +30,8 @@ export default function ReelsScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6C5CE7" />
-        <Text style={styles.loadingText}>Loading your videos...</Text>
+        <ActivityIndicator size="large" color="#FF2D55" />
+        <Text style={styles.loadingText}>Loading videos...</Text>
       </View>
     );
   }
@@ -46,9 +43,7 @@ export default function ReelsScreen() {
         <Text style={styles.emptyTitle}>Permission Required</Text>
         <Text style={styles.emptySubtitle}>Allow access to your media library</Text>
         <TouchableOpacity style={styles.accentBtn} onPress={reload}>
-          <LinearGradient colors={['#6C5CE7', '#00C6FF']} style={styles.accentBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            <Text style={styles.accentBtnText}>Grant Permission</Text>
-          </LinearGradient>
+          <Text style={styles.accentBtnText}>Grant Permission</Text>
         </TouchableOpacity>
       </View>
     );
@@ -61,9 +56,7 @@ export default function ReelsScreen() {
         <Text style={styles.emptyTitle}>No Videos Found</Text>
         <Text style={styles.emptySubtitle}>Record some videos to get started</Text>
         <TouchableOpacity style={styles.accentBtn} onPress={reload}>
-          <LinearGradient colors={['#6C5CE7', '#00C6FF']} style={styles.accentBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            <Text style={styles.accentBtnText}>Refresh</Text>
-          </LinearGradient>
+          <Text style={styles.accentBtnText}>Refresh</Text>
         </TouchableOpacity>
       </View>
     );
@@ -94,25 +87,26 @@ export default function ReelsScreen() {
         windowSize={3}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
+        updateCellsBatchingPeriod={50}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
       />
 
-      {/* ── Top header overlay ── */}
+      {/* Header overlay */}
       <SafeAreaView style={styles.header} pointerEvents="none">
         <Text style={styles.logo}>ReelGram</Text>
-        <BlurView intensity={35} tint="dark" style={styles.countPill}>
-          <Text style={styles.countText}>{videos.length} videos</Text>
-        </BlurView>
+        <View style={styles.countPill}>
+          <Text style={styles.countText}>{videos.length}</Text>
+        </View>
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0F' },
+  container: { flex: 1, backgroundColor: '#000' },
   center: {
-    flex: 1, backgroundColor: '#0A0A0F',
+    flex: 1, backgroundColor: '#000',
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40,
   },
   header: {
@@ -121,21 +115,20 @@ const styles = StyleSheet.create({
     alignItems: 'center', paddingHorizontal: 20, paddingTop: 6, zIndex: 20,
   },
   logo: {
-    fontSize: 22, fontWeight: '800', letterSpacing: -0.5, color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
+    fontSize: 20, fontWeight: '800', letterSpacing: -0.4, color: '#fff',
   },
   countPill: {
-    borderRadius: 14, overflow: 'hidden',
-    paddingHorizontal: 12, paddingVertical: 5,
-    borderWidth: 1, borderColor: 'rgba(108,92,231,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4,
   },
-  countText: { color: '#A29BFE', fontSize: 12, fontWeight: '700' },
-  loadingText: { color: 'rgba(255,255,255,0.5)', fontSize: 15, marginTop: 14 },
-  bigEmoji: { fontSize: 64, marginBottom: 20 },
-  emptyTitle: { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
-  emptySubtitle: { color: 'rgba(255,255,255,0.42)', fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
-  accentBtn: { borderRadius: 30, overflow: 'hidden' },
-  accentBtnGrad: { paddingHorizontal: 32, paddingVertical: 13 },
+  countText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600' },
+  loadingText: { color: 'rgba(255,255,255,0.45)', fontSize: 14, marginTop: 12 },
+  bigEmoji: { fontSize: 56, marginBottom: 18 },
+  emptyTitle: { color: '#fff', fontSize: 22, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  emptySubtitle: { color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  accentBtn: {
+    backgroundColor: '#FF2D55', borderRadius: 28,
+    paddingHorizontal: 30, paddingVertical: 13,
+  },
   accentBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
